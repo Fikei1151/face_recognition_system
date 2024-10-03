@@ -16,9 +16,6 @@ app.config['UPLOAD_FOLDER'] = 'static/uploads/'
 
 db.init_app(app)
 
-# สร้างตารางในฐานข้อมูลถ้ายังไม่มี
-with app.app_context():
-    db.create_all()
 
 # Initialize the emotion detection model
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -29,6 +26,21 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'JPG', 'PNG'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+from celery import Celery  # เพิ่มการนำเข้า Celery
+
+def make_celery(app):
+    celery = Celery(
+        app.import_name,
+        backend='redis://redis:6379/0',
+        broker='redis://redis:6379/0'
+    )
+    celery.conf.update(app.config)
+    return celery
+
+celery = make_celery(app)
+
+with app.app_context():
+    db.create_all()
 
 @app.route('/')
 def index():
