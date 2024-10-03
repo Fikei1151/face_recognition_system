@@ -8,3 +8,5 @@ torchvision
 Flask-Migrate
 cmake
 dlib
+celery
+redis
