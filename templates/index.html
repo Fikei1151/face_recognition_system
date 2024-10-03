@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Facial Recognition and Emotion Detection</title>
+  </head>
+  <body>
+    <h1>Upload Image</h1>
+    <form method="POST" enctype="multipart/form-data" action="{{ url_for('upload') }}">
+      <input type="file" name="file" />
+      <button type="submit">Upload</button>
+    </form>
+  </body>
+</html>

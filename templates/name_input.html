@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Enter Name</title>
+  </head>
+  <body>
+    <h1>Detected Emotion: {{ emotion }}</h1>
+    <h2>Enter Name for Detected Face</h2>
+    <form method="POST" action="{{ url_for('save_person') }}">
+      <input type="text" name="name" placeholder="Enter name" />
+      <input type="hidden" name="encoding" value="{{ encoding }}" />
+      <button type="submit">Save</button>
+    </form>
+  </body>
+</html>

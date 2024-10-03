@@ -1,0 +1,10 @@
+Flask
+SQLAlchemy
+psycopg2-binary
+opencv-python
+face-recognition
+torch
+torchvision
+Flask-Migrate
+cmake
+dlib
