@@ -10,3 +10,6 @@ cmake
 dlib
 celery
 redis
+dash
+dash-bootstrap-components
+pandas

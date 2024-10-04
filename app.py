@@ -8,26 +8,31 @@ from repvgg import init, detect_emotion
 from PIL import Image
 import torch
 from werkzeug.utils import secure_filename
+from dash import Dash, dcc, html, Input, Output
+import dash_bootstrap_components as dbc
+import plotly.express as px
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
+from celery import Celery
+from datetime import datetime
 
+# Initialize Flask app
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://user:password@db:5432/facial_emotion_recognition'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/uploads/'
 
+# Initialize SQLAlchemy
 db.init_app(app)
-
 
 # Initialize the emotion detection model
 device = "cuda" if torch.cuda.is_available() else "cpu"
 init(device)
 
-# ประเภทไฟล์ที่อนุญาตให้อัปโหลด
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'JPG', 'PNG'}
+# Initialize Dash app
+dash_app = Dash(__name__, server=app, url_base_pathname='/dashboard/', external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-from celery import Celery  # เพิ่มการนำเข้า Celery
-
+# Initialize Celery
 def make_celery(app):
     celery = Celery(
         app.import_name,
@@ -39,9 +44,92 @@ def make_celery(app):
 
 celery = make_celery(app)
 
+# Create tables in the database
 with app.app_context():
     db.create_all()
 
+# SQLAlchemy setup for session
+engine = create_engine('postgresql://user:password@db:5432/facial_emotion_recognition')
+Session = sessionmaker(bind=engine)
+session = Session()
+
+# File type restrictions
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'JPG', 'PNG'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# Dash dashboard layout and callback
+def get_data_by_person(person_name):
+    records = session.query(Emotion, Person).join(Person).filter(Person.name == person_name).all()
+    data = {
+        'name': [record.Person.name for record in records],
+        'emotion': [record.Emotion.emotion for record in records],
+        'timestamp': [record.Emotion.timestamp for record in records]
+    }
+    return data
+
+def get_all_data():
+    records = session.query(Emotion, Person).join(Person).all()
+    data = {
+        'name': [record.Person.name for record in records],
+        'emotion': [record.Emotion.emotion for record in records],
+        'timestamp': [record.Emotion.timestamp for record in records]
+    }
+    return data
+
+def generate_dashboard_layout():
+    person_options = [{'label': 'All', 'value': 'all'}]
+    all_records = session.query(Person).all()
+    for record in all_records:
+        person_options.append({'label': record.name, 'value': record.name})
+
+    layout = html.Div([
+        dbc.NavbarSimple(
+            children=[
+                dbc.NavItem(dcc.Link('Home', href='/')),
+                dbc.NavItem(dcc.Link('Dashboard', href='/dashboard/')),
+            ],
+            brand='Facial Emotion Dashboard',
+            color='primary',
+            dark=True,
+        ),
+        dbc.Row([
+            dbc.Col(html.H2("Emotion Statistics Dashboard")),
+            dbc.Col(dcc.Dropdown(id='person-select', options=person_options, value='all', clearable=False)),
+        ]),
+        dbc.Row([
+            dbc.Col(dcc.Graph(id='emotion-stats-graph')),
+        ]),
+    ])
+    return layout
+
+# Callback for Dash to update graph
+@dash_app.callback(
+    Output('emotion-stats-graph', 'figure'),
+    [Input('person-select', 'value')]
+)
+def update_graph(selected_person):
+    if selected_person == 'all':
+        data = get_all_data()
+    else:
+        data = get_data_by_person(selected_person)
+    
+    if not data['timestamp']:
+        return px.line()
+
+    fig = px.line(
+        x=data['timestamp'],
+        y=data['emotion'],
+        color=data['name'],
+        title=f"Emotion Trends for {'All' if selected_person == 'all' else selected_person}"
+    )
+    fig.update_layout(xaxis_title='Timestamp', yaxis_title='Emotion')
+    return fig
+
+dash_app.layout = generate_dashboard_layout()
+
+# Flask routes
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -110,7 +198,11 @@ def upload():
                     break
             
             if matched_person:
-                # ถ้ารู้จักบุคคลนี้ ให้แสดงชื่อและอารมณ์
+                # บันทึกอารมณ์ลงในฐานข้อมูล
+                new_emotion = Emotion(person_id=matched_person.id, emotion=emotion[0], timestamp=datetime.utcnow())
+                db.session.add(new_emotion)
+                db.session.commit()
+
                 detected_faces.append({'name': matched_person.name, 'encoding': encoding.tolist(), 'emotion': emotion[0]})
             else:
                 # ถ้าไม่รู้จัก ให้กรอกชื่อ
