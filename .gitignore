@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info
+*.env
+venv/
+env/
+
+# Docker
+*.log
+*.pid
+*.seed
+*.pid.lock
+docker-compose.override.yml
+docker-compose.local.yml
+
+# PostgreSQL Data
+postgres_data/
+
+# Redis Data
+redis_data/
+
+# PyTorch Model Cache
+~/.cache/torch/
+
+# Environment Variables
+.env
+
+# Byte-compiled / optimized / DLL files
+*.py[cod]
+*$py.class
+
+# Flask
+instance/
+*.sqlite
+
+# Logs
+*.log
+
+# PyCharm
+.idea/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
