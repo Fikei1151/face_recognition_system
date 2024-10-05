@@ -45,6 +45,7 @@ def make_celery(app):
 
 celery = make_celery(app)
 
+# Create tables in the database
 with app.app_context():
     db.create_all()
 
@@ -54,52 +55,62 @@ Session = sessionmaker(bind=engine)
 session = Session()
 
 # File type restrictions
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'JPG', 'PNG'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'JPG', 'PNG','webp','avif'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Reusable function for processing image(s) and saving to DB
-def process_and_save_image(file_path):
-    print(f"Processing file: {file_path}")
-    
-    # Load image and detect faces
-    image = face_recognition.load_image_file(file_path)
-    face_locations = face_recognition.face_locations(image)
-    face_encodings = face_recognition.face_encodings(image, face_locations)
-    print(f"Detected {len(face_encodings)} faces")
+# Reusable function for processing image(s)
+def process_images(file_paths):
+    all_faces = []
+    unknown_faces = []
 
-    detected_faces = []
-    
-    if len(face_encodings) > 0:
-        pil_image = Image.open(file_path).convert("RGB")
-        np_image = np.array(pil_image)
+    for file_path in file_paths:
+        print(f"Processing file: {file_path}")
 
-        # Detect emotion with RepVGG model
-        emotions = detect_emotion([np_image])
-        print(f"Emotions detected: {emotions}")
+        # Load image
+        image = face_recognition.load_image_file(file_path)
+        face_locations = face_recognition.face_locations(image)
+        face_encodings = face_recognition.face_encodings(image, face_locations)
 
-        for encoding, emotion in zip(face_encodings, emotions):
-            all_persons = Person.query.all()
-            matched_person = None
-            
-            # Compare encodings with known persons
-            for person in all_persons:
-                if face_recognition.compare_faces([np.array(person.face_encoding)], encoding)[0]:
-                    matched_person = person
-                    break
-            
-            if matched_person:
-                # Save emotion to DB for known person
-                new_emotion = Emotion(person_id=matched_person.id, emotion=emotion[0], timestamp=datetime.utcnow())
-                db.session.add(new_emotion)
-                db.session.commit()
-                detected_faces.append({'name': matched_person.name, 'encoding': encoding.tolist(), 'emotion': emotion[0]})
-            else:
-                # Return for user to input name if unknown
-                return render_template('name_input.html', encoding=encoding.tolist(), emotion=emotion[0])
+        if len(face_encodings) > 0:
+            pil_image = Image.open(file_path).convert("RGB")
+            np_image = np.array(pil_image)
+            detected_faces = []
 
-    return detected_faces
+            for encoding in face_encodings:
+                matched_person = None
+                all_persons = Person.query.all()
+
+                # Compare encodings
+                for person in all_persons:
+                    if face_recognition.compare_faces([np.array(person.face_encoding)], encoding)[0]:
+                        matched_person = person
+                        break
+
+                if matched_person:
+                    detected_faces.append({
+                        'name': matched_person.name,
+                        'emotion': 'Unknown',
+                        'image_path': file_path
+                    })
+                else:
+                    unknown_faces.append({
+                        'encoding': encoding.tolist(),
+                        'image_path': file_path
+                    })
+
+            # Detect emotion for known faces
+            if detected_faces:
+                emotions = detect_emotion([np_image])
+                for idx, emotion in enumerate(emotions):
+                    detected_faces[idx]['emotion'] = emotion[0]
+
+            all_faces.extend(detected_faces)
+
+        time.sleep(1)
+
+    return all_faces, unknown_faces
 
 # Flask routes
 @app.route('/')
@@ -109,37 +120,89 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     if 'file' not in request.files:
-        return jsonify({"error": "No file part in request"}), 400
+        print("No file part in request")
+        return redirect(url_for('index'))
 
     file = request.files['file']
+    print(f"Uploaded file: {file.filename}")
 
     if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
+        print("No selected file")
+        return redirect(url_for('index'))
 
+    # ตรวจสอบประเภทไฟล์ที่อนุญาต
     if not allowed_file(file.filename):
-        return jsonify({"error": "Invalid file type"}), 400
+        print("Invalid file type")
+        return "ไฟล์ไม่ถูกต้อง อนุญาตเฉพาะไฟล์รูปภาพเท่านั้น"
 
     filename = secure_filename(file.filename)
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     
+    # บันทึกไฟล์
     try:
         file.save(file_path)
+        print(f"File saved to {file_path}")
     except Exception as e:
-        return jsonify({"error": f"Cannot save file: {str(e)}"}), 500
-
-    # Process and save image, returning the detected faces
-    detected_faces = process_and_save_image(file_path)
+        print(f"File saving failed: {str(e)}")
+        return f"ไม่สามารถบันทึกไฟล์ได้: {str(e)}"
     
-    if detected_faces:
+    # โหลดและตรวจจับใบหน้า
+    try:
+        image = face_recognition.load_image_file(file_path)
+        print("Image loaded successfully")
+    except Exception as e:
+        print(f"Error loading image: {str(e)}")
+        return f"เกิดข้อผิดพลาดในการโหลดรูปภาพ: {str(e)}"
+
+    # ตรวจจับตำแหน่งของใบหน้า
+    face_locations = face_recognition.face_locations(image)
+    face_encodings = face_recognition.face_encodings(image, face_locations)
+    print(f"Detected {len(face_encodings)} faces")
+
+    if len(face_encodings) > 0:
+        try:
+            pil_image = Image.open(file_path).convert("RGB")
+            np_image = np.array(pil_image)
+
+            # ตรวจจับอารมณ์ด้วยโมเดล RepVGG
+            emotions = detect_emotion([np_image])
+            print(f"Emotions detected: {emotions}")
+        except Exception as e:
+            print(f"Error detecting emotion: {str(e)}")
+            return f"เกิดข้อผิดพลาดในการตรวจจับอารมณ์: {str(e)}"
+        
+        detected_faces = []
+        for encoding, emotion in zip(face_encodings, emotions):
+            all_persons = Person.query.all()
+            matched_person = None
+            for person in all_persons:
+                if face_recognition.compare_faces([np.array(person.face_encoding)], encoding)[0]:
+                    matched_person = person
+                    break
+            
+            if matched_person:
+                # บันทึกอารมณ์ลงในฐานข้อมูล
+                new_emotion = Emotion(person_id=matched_person.id, emotion=emotion[0], timestamp=datetime.utcnow())
+                db.session.add(new_emotion)
+                db.session.commit()
+
+                detected_faces.append({'name': matched_person.name, 'encoding': encoding.tolist(), 'emotion': emotion[0]})
+            else:
+                # ถ้าไม่รู้จัก ให้กรอกชื่อ
+                return render_template('name_input.html', encoding=encoding.tolist(), emotion=emotion[0])
+
+        # แสดงหน้าที่มีรูป ชื่อ และอารมณ์
         return render_template('show_faces.html', faces=detected_faces, image_path=file_path)
-    else:
-        return "No faces detected."
+
+    print("No faces detected")
+    return "No faces detected in the uploaded image."
 
 @app.route('/upload_multiple', methods=['POST'])
 def upload_multiple():
     files = request.files.getlist('files')
     saved_files = []
 
+    # Save uploaded files
     for file in files:
         if file.filename == '':
             continue
@@ -154,14 +217,73 @@ def upload_multiple():
             file.save(file_path)
             saved_files.append(file_path)
         except Exception as e:
+            print(f"Error saving file: {str(e)}")
             continue
 
-    all_faces = []
-    for file_path in saved_files:
-        detected_faces = process_and_save_image(file_path)
-        all_faces.extend(detected_faces)
+    # Process the images if there are any saved files
+    if len(saved_files) > 0:
+        all_faces = []
+        unknown_faces = []
 
-    return render_template('show_faces_multi.html', faces=all_faces)
+        for file_path in saved_files:
+            try:
+                image = face_recognition.load_image_file(file_path)
+                print(f"Processing file: {file_path}")
+            except Exception as e:
+                print(f"Error loading image: {str(e)}")
+                continue
+
+            face_locations = face_recognition.face_locations(image)
+            face_encodings = face_recognition.face_encodings(image, face_locations)
+
+            # If faces are found in the image
+            if len(face_encodings) > 0:
+                try:
+                    pil_image = Image.open(file_path).convert("RGB")
+                    np_image = np.array(pil_image)
+                    emotions = detect_emotion([np_image])  # Detect emotions for each face
+                except Exception as e:
+                    print(f"Error detecting emotion: {str(e)}")
+                    continue
+
+                # Process each face in the image
+                detected_faces = []
+                for encoding, emotion in zip(face_encodings, emotions):
+                    all_persons = Person.query.all()
+                    matched_person = None
+
+                    # Compare this face encoding with all known persons
+                    for person in all_persons:
+                        if face_recognition.compare_faces([np.array(person.face_encoding)], encoding)[0]:
+                            matched_person = person
+                            break
+
+                    if matched_person:
+                        # If person is matched, update emotion in the database
+                        new_emotion = Emotion(person_id=matched_person.id, emotion=emotion[0], timestamp=datetime.utcnow())
+                        db.session.add(new_emotion)
+                        db.session.commit()  # Make sure to commit here!
+
+                        detected_faces.append({
+                            'name': matched_person.name,
+                            'encoding': encoding.tolist(),
+                            'emotion': emotion[0]
+                        })
+                    else:
+                        # If no match, store for later input
+                        unknown_faces.append({
+                            'encoding': encoding.tolist(),
+                            'emotion': emotion[0],
+                            'image_path': file_path
+                        })
+
+                all_faces.extend(detected_faces)
+
+        # Return template with known and unknown faces
+        return render_template('show_faces_multi.html', faces=all_faces, unknown_faces=unknown_faces)
+
+    return "No files uploaded."
+
 
 @app.route('/show_faces_multi')
 def show_faces_multi():
@@ -174,12 +296,15 @@ def upload_multiple_page():
 @app.route('/save_person', methods=['POST'])
 def save_person():
     name = request.form['name']
-    encoding = request.form['encoding']
-    encoding = np.array(eval(encoding))  # Convert string back to array
+    encoding = np.array(eval(request.form['encoding']))  # แปลงข้อมูลกลับเป็น numpy array
+    
     new_person = Person(name=name, face_encoding=encoding)
     db.session.add(new_person)
     db.session.commit()
+    
     return redirect(url_for('index'))
+
+
 # Dash dashboard layout and callback
 def get_data_by_person(person_name):
     records = session.query(Emotion, Person).join(Person).filter(Person.name == person_name).all()
@@ -248,7 +373,9 @@ def update_graph(selected_person):
     fig.update_layout(xaxis_title='Timestamp', yaxis_title='Emotion')
     return fig
 
+
 dash_app.layout = generate_dashboard_layout()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)
+

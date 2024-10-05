@@ -1,20 +1,31 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Face Detection Results</title>
+    <title>Detected Faces</title>
 </head>
 <body>
-    <h1>Detected Faces</h1>
-    <ul>
-        {% for face in faces %}
-        <li>{{ face.name }} - Emotion: {{ face.emotion }}</li>
-        {% endfor %}
-    </ul>
+    <h1>Detected Faces and Emotions</h1>
+    <img src="{{ url_for('static', filename=image_path.split('static/')[-1]) }}" alt="Uploaded Image" width="400">
 
-    <img src="{{ image_path }}" alt="Detected Face">
-
-    <a href="/">Back to Home</a>
+    <form method="POST" action="{{ url_for('show_faces_multi') }}">
+        <table>
+            <tr>
+                <th>Face</th>
+                <th>Name</th>
+                <th>Emotion</th>
+            </tr>
+            {% for face in faces %}
+            <tr>
+                <td>Face {{ loop.index }}</td>
+                <td>
+                    <input type="text" name="name" value="{{ face.name }}">
+                    <input type="hidden" name="encoding" value="{{ face.encoding }}">
+                </td>
+                <td>{{ face.emotion }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        <button type="submit">Update Names</button>
+    </form>
 </body>
 </html>

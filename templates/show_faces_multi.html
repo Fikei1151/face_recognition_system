@@ -1,26 +1,46 @@
 {% extends "layout.html" %}
 {% block content %}
-<h1>Results for Known Faces</h1>
-{% if faces %}
-    <ul>
-    {% for face in faces %}
-        <li>{{ face.name }} - Emotion: {{ face.emotion }}</li>
-    {% endfor %}
-    </ul>
-{% else %}
-    <p>No known faces detected.</p>
-{% endif %}
-
-<h2>Enter Names for Unknown Faces</h2>
-{% if unknown_faces %}
-    <form action="{{ url_for('save_person') }}" method="POST">
-        <input type="text" name="name" placeholder="Enter name for all unknown faces" required>
-        {% for unknown in unknown_faces %}
-            <input type="hidden" name="encodings[]" value="{{ unknown.encoding }}">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Show Faces</title>
+</head>
+<body>
+    <h1>Results for Known Faces</h1>
+    {% if faces %}
+        <ul>
+        {% for face in faces %}
+            <li>
+                Name: {{ face.name }} - Emotion: {{ face.emotion }} <br>
+                <img src="{{ face.image_path }}" alt="Face Image" style="width:100px;">
+            </li>
         {% endfor %}
-        <button type="submit" class="btn btn-primary">Save</button>
-    </form>
-{% else %}
-    <p>No unknown faces to input.</p>
-{% endif %}
+        </ul>
+    {% else %}
+        <p>No known faces detected.</p>
+    {% endif %}
+
+    <h1>Enter Names for Unknown Faces</h1>
+    {% if unknown_faces %}
+        <form action="{{ url_for('save_person') }}" method="POST">
+        {% for face in unknown_faces %}
+            <div>
+                <label for="name">Enter name for this face:</label>
+                <input type="text" name="name" required>
+                <input type="hidden" name="encoding" value="{{ face.encoding }}">
+                <input type="hidden" name="image_path" value="{{ face.image_path }}">
+                <img src="{{ face.image_path }}" alt="Unknown Face" style="width:100px;">
+            </div>
+        {% endfor %}
+        <button type="submit">Save</button>
+        </form>
+    {% else %}
+        <p>No unknown faces to input.</p>
+    {% endif %}
+</body>
+</html>
+
 {% endblock %}
