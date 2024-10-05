@@ -1,15 +1,17 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Enter Name</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Input Name</title>
 </head>
 <body>
-    <h1>Enter Name for the Detected Face</h1>
-    <form method="POST" action="{{ url_for('save_person') }}">
-        <p>Emotion detected: {{ emotion }}</p>
-        <input type="hidden" name="encoding" value="{{ encoding }}">
-        <label for="name">Name:</label>
+    <h1>Unknown Face Detected</h1>
+    <form method="POST" action="/save_person">
+        <label for="name">Enter Name:</label>
         <input type="text" id="name" name="name" required>
+        <input type="hidden" name="encoding" value="{{ encoding }}">
+        <input type="hidden" name="image_path" value="{{ image_path }}">
         <button type="submit">Save</button>
     </form>
 </body>

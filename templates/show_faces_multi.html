@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>Results for Known Faces</h1>
+{% if faces %}
+    <ul>
+    {% for face in faces %}
+        <li>{{ face.name }} - Emotion: {{ face.emotion }}</li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No known faces detected.</p>
+{% endif %}
+
+<h2>Enter Names for Unknown Faces</h2>
+{% if unknown_faces %}
+    <form action="{{ url_for('save_person') }}" method="POST">
+        <input type="text" name="name" placeholder="Enter name for all unknown faces" required>
+        {% for unknown in unknown_faces %}
+            <input type="hidden" name="encodings[]" value="{{ unknown.encoding }}">
+        {% endfor %}
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+{% else %}
+    <p>No unknown faces to input.</p>
+{% endif %}
+{% endblock %}

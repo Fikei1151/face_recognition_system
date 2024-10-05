@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 import os
 import cv2
 import face_recognition
@@ -45,7 +45,6 @@ def make_celery(app):
 
 celery = make_celery(app)
 
-# Create tables in the database
 with app.app_context():
     db.create_all()
 
@@ -60,6 +59,127 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'JPG', 'PNG'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# Reusable function for processing image(s) and saving to DB
+def process_and_save_image(file_path):
+    print(f"Processing file: {file_path}")
+    
+    # Load image and detect faces
+    image = face_recognition.load_image_file(file_path)
+    face_locations = face_recognition.face_locations(image)
+    face_encodings = face_recognition.face_encodings(image, face_locations)
+    print(f"Detected {len(face_encodings)} faces")
+
+    detected_faces = []
+    
+    if len(face_encodings) > 0:
+        pil_image = Image.open(file_path).convert("RGB")
+        np_image = np.array(pil_image)
+
+        # Detect emotion with RepVGG model
+        emotions = detect_emotion([np_image])
+        print(f"Emotions detected: {emotions}")
+
+        for encoding, emotion in zip(face_encodings, emotions):
+            all_persons = Person.query.all()
+            matched_person = None
+            
+            # Compare encodings with known persons
+            for person in all_persons:
+                if face_recognition.compare_faces([np.array(person.face_encoding)], encoding)[0]:
+                    matched_person = person
+                    break
+            
+            if matched_person:
+                # Save emotion to DB for known person
+                new_emotion = Emotion(person_id=matched_person.id, emotion=emotion[0], timestamp=datetime.utcnow())
+                db.session.add(new_emotion)
+                db.session.commit()
+                detected_faces.append({'name': matched_person.name, 'encoding': encoding.tolist(), 'emotion': emotion[0]})
+            else:
+                # Return for user to input name if unknown
+                return render_template('name_input.html', encoding=encoding.tolist(), emotion=emotion[0])
+
+    return detected_faces
+
+# Flask routes
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part in request"}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({"error": "Invalid file type"}), 400
+
+    filename = secure_filename(file.filename)
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    
+    try:
+        file.save(file_path)
+    except Exception as e:
+        return jsonify({"error": f"Cannot save file: {str(e)}"}), 500
+
+    # Process and save image, returning the detected faces
+    detected_faces = process_and_save_image(file_path)
+    
+    if detected_faces:
+        return render_template('show_faces.html', faces=detected_faces, image_path=file_path)
+    else:
+        return "No faces detected."
+
+@app.route('/upload_multiple', methods=['POST'])
+def upload_multiple():
+    files = request.files.getlist('files')
+    saved_files = []
+
+    for file in files:
+        if file.filename == '':
+            continue
+
+        if not allowed_file(file.filename):
+            continue
+
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        try:
+            file.save(file_path)
+            saved_files.append(file_path)
+        except Exception as e:
+            continue
+
+    all_faces = []
+    for file_path in saved_files:
+        detected_faces = process_and_save_image(file_path)
+        all_faces.extend(detected_faces)
+
+    return render_template('show_faces_multi.html', faces=all_faces)
+
+@app.route('/show_faces_multi')
+def show_faces_multi():
+    return render_template('show_faces_multi.html')
+
+@app.route('/upload_multiple_page', methods=['GET'])
+def upload_multiple_page():
+    return render_template('upload_multiple.html')
+
+@app.route('/save_person', methods=['POST'])
+def save_person():
+    name = request.form['name']
+    encoding = request.form['encoding']
+    encoding = np.array(eval(encoding))  # Convert string back to array
+    new_person = Person(name=name, face_encoding=encoding)
+    db.session.add(new_person)
+    db.session.commit()
+    return redirect(url_for('index'))
 # Dash dashboard layout and callback
 def get_data_by_person(person_name):
     records = session.query(Emotion, Person).join(Person).filter(Person.name == person_name).all()
@@ -129,195 +249,6 @@ def update_graph(selected_person):
     return fig
 
 dash_app.layout = generate_dashboard_layout()
-
-# Flask routes
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/upload', methods=['POST'])
-def upload():
-    if 'file' not in request.files:
-        print("No file part in request")
-        return redirect(url_for('index'))
-
-    file = request.files['file']
-    print(f"Uploaded file: {file.filename}")
-
-    if file.filename == '':
-        print("No selected file")
-        return redirect(url_for('index'))
-
-    # ตรวจสอบประเภทไฟล์ที่อนุญาต
-    if not allowed_file(file.filename):
-        print("Invalid file type")
-        return "ไฟล์ไม่ถูกต้อง อนุญาตเฉพาะไฟล์รูปภาพเท่านั้น"
-
-    filename = secure_filename(file.filename)
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    
-    # บันทึกไฟล์
-    try:
-        file.save(file_path)
-        print(f"File saved to {file_path}")
-    except Exception as e:
-        print(f"File saving failed: {str(e)}")
-        return f"ไม่สามารถบันทึกไฟล์ได้: {str(e)}"
-    
-    # โหลดและตรวจจับใบหน้า
-    try:
-        image = face_recognition.load_image_file(file_path)
-        print("Image loaded successfully")
-    except Exception as e:
-        print(f"Error loading image: {str(e)}")
-        return f"เกิดข้อผิดพลาดในการโหลดรูปภาพ: {str(e)}"
-
-    # ตรวจจับตำแหน่งของใบหน้า
-    face_locations = face_recognition.face_locations(image)
-    face_encodings = face_recognition.face_encodings(image, face_locations)
-    print(f"Detected {len(face_encodings)} faces")
-
-    if len(face_encodings) > 0:
-        try:
-            pil_image = Image.open(file_path).convert("RGB")
-            np_image = np.array(pil_image)
-
-            # ตรวจจับอารมณ์ด้วยโมเดล RepVGG
-            emotions = detect_emotion([np_image])
-            print(f"Emotions detected: {emotions}")
-        except Exception as e:
-            print(f"Error detecting emotion: {str(e)}")
-            return f"เกิดข้อผิดพลาดในการตรวจจับอารมณ์: {str(e)}"
-        
-        detected_faces = []
-        for encoding, emotion in zip(face_encodings, emotions):
-            all_persons = Person.query.all()
-            matched_person = None
-            for person in all_persons:
-                if face_recognition.compare_faces([np.array(person.face_encoding)], encoding)[0]:
-                    matched_person = person
-                    break
-            
-            if matched_person:
-                # บันทึกอารมณ์ลงในฐานข้อมูล
-                new_emotion = Emotion(person_id=matched_person.id, emotion=emotion[0], timestamp=datetime.utcnow())
-                db.session.add(new_emotion)
-                db.session.commit()
-
-                detected_faces.append({'name': matched_person.name, 'encoding': encoding.tolist(), 'emotion': emotion[0]})
-            else:
-                # ถ้าไม่รู้จัก ให้กรอกชื่อ
-                return render_template('name_input.html', encoding=encoding.tolist(), emotion=emotion[0])
-
-        # แสดงหน้าที่มีรูป ชื่อ และอารมณ์
-        return render_template('show_faces.html', faces=detected_faces, image_path=file_path)
-
-    print("No faces detected")
-    return "No faces detected in the uploaded image."
-
-@app.route('/show_faces', methods=['POST'])
-def show_faces():
-    # อัปเดตชื่อบุคคลจากหน้า show_faces
-    for i, name in enumerate(request.form.getlist('name')):
-        encoding = np.array(eval(request.form.getlist('encoding')[i]))  # แปลงข้อมูลกลับเป็น numpy array
-        existing_person = Person.query.filter_by(face_encoding=encoding.tolist()).first()
-
-        if not existing_person:
-            # เพิ่มบุคคลใหม่ถ้าไม่พบในฐานข้อมูล
-            new_person = Person(name=name, face_encoding=encoding)
-            db.session.add(new_person)
-        else:
-            # อัปเดตชื่อของบุคคลที่มีอยู่แล้ว
-            existing_person.name = name
-
-        db.session.commit()
-
-    return redirect(url_for('index'))
-
-@app.route('/save_person', methods=['POST'])
-def save_person():
-    name = request.form['name']
-    encoding = request.form['encoding']
-    encoding = np.array(eval(encoding))  # แปลงข้อมูลกลับเป็น numpy array
-    new_person = Person(name=name, face_encoding=encoding)
-    db.session.add(new_person)
-    db.session.commit()
-    return redirect(url_for('index'))
-
-# Flask route for multiple image uploads
-@app.route('/upload_multiple', methods=['POST'])
-def upload_multiple():
-    files = request.files.getlist('files')
-    saved_files = []
-
-    for file in files:
-        if file.filename == '':
-            print("No selected file")
-            continue
-
-        if not allowed_file(file.filename):
-            print(f"Invalid file type: {file.filename}")
-            continue
-
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        
-        # บันทึกไฟล์
-        try:
-            file.save(file_path)
-            saved_files.append(file_path)
-            print(f"File saved to {file_path}")
-        except Exception as e:
-            print(f"File saving failed: {str(e)}")
-    
-    if len(saved_files) > 0:
-        # เรียกใช้ Celery task ผ่าน DAG
-        process_images.delay(saved_files)
-    
-    return "Files uploaded and will be processed!"
-
-# ฟังก์ชันประมวลผลรูปเดี่ยว
-def process_image(file_path):
-    try:
-        image = face_recognition.load_image_file(file_path)
-        face_locations = face_recognition.face_locations(image)
-        face_encodings = face_recognition.face_encodings(image, face_locations)
-
-        if len(face_encodings) > 0:
-            pil_image = Image.open(file_path).convert("RGB")
-            np_image = np.array(pil_image)
-            emotions = detect_emotion([np_image])
-
-            for encoding, emotion in zip(face_encodings, emotions):
-                all_persons = Person.query.all()
-                matched_person = None
-                for person in all_persons:
-                    if face_recognition.compare_faces([np.array(person.face_encoding)], encoding)[0]:
-                        matched_person = person
-                        break
-                
-                if matched_person:
-                    new_emotion = Emotion(person_id=matched_person.id, emotion=emotion[0], timestamp=datetime.utcnow())
-                    db.session.add(new_emotion)
-                    db.session.commit()
-                else:
-                    print(f"Unknown person in file: {file_path}")
-    except Exception as e:
-        print(f"Error processing {file_path}: {str(e)}")
-
-# Celery task for processing multiple images
-@celery.task
-def process_images(file_paths):
-    for i, file_path in enumerate(file_paths):
-        if i > 0 and i % 5 == 0:
-            time.sleep(60)  # หยุด 1 นาทีหลังจากประมวลผล 5 รูป
-
-        process_image(file_path)
-
-@app.route('/upload_multiple_page')
-def upload_multiple_page():
-    return render_template('upload_multiple.html')
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)
