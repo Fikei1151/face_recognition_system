@@ -15,6 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from celery import Celery
 from datetime import datetime
+import time
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -242,6 +243,81 @@ def save_person():
     db.session.add(new_person)
     db.session.commit()
     return redirect(url_for('index'))
+
+# Flask route for multiple image uploads
+@app.route('/upload_multiple', methods=['POST'])
+def upload_multiple():
+    files = request.files.getlist('files')
+    saved_files = []
+
+    for file in files:
+        if file.filename == '':
+            print("No selected file")
+            continue
+
+        if not allowed_file(file.filename):
+            print(f"Invalid file type: {file.filename}")
+            continue
+
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # บันทึกไฟล์
+        try:
+            file.save(file_path)
+            saved_files.append(file_path)
+            print(f"File saved to {file_path}")
+        except Exception as e:
+            print(f"File saving failed: {str(e)}")
+    
+    if len(saved_files) > 0:
+        # เรียกใช้ Celery task ผ่าน DAG
+        process_images.delay(saved_files)
+    
+    return "Files uploaded and will be processed!"
+
+# ฟังก์ชันประมวลผลรูปเดี่ยว
+def process_image(file_path):
+    try:
+        image = face_recognition.load_image_file(file_path)
+        face_locations = face_recognition.face_locations(image)
+        face_encodings = face_recognition.face_encodings(image, face_locations)
+
+        if len(face_encodings) > 0:
+            pil_image = Image.open(file_path).convert("RGB")
+            np_image = np.array(pil_image)
+            emotions = detect_emotion([np_image])
+
+            for encoding, emotion in zip(face_encodings, emotions):
+                all_persons = Person.query.all()
+                matched_person = None
+                for person in all_persons:
+                    if face_recognition.compare_faces([np.array(person.face_encoding)], encoding)[0]:
+                        matched_person = person
+                        break
+                
+                if matched_person:
+                    new_emotion = Emotion(person_id=matched_person.id, emotion=emotion[0], timestamp=datetime.utcnow())
+                    db.session.add(new_emotion)
+                    db.session.commit()
+                else:
+                    print(f"Unknown person in file: {file_path}")
+    except Exception as e:
+        print(f"Error processing {file_path}: {str(e)}")
+
+# Celery task for processing multiple images
+@celery.task
+def process_images(file_paths):
+    for i, file_path in enumerate(file_paths):
+        if i > 0 and i % 5 == 0:
+            time.sleep(60)  # หยุด 1 นาทีหลังจากประมวลผล 5 รูป
+
+        process_image(file_path)
+
+@app.route('/upload_multiple_page')
+def upload_multiple_page():
+    return render_template('upload_multiple.html')
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)
