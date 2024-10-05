@@ -1,31 +1,83 @@
 <!doctype html>
 <html lang="en">
+
 <head>
     <title>Detected Faces</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
 </head>
-<body>
-    <h1>Detected Faces and Emotions</h1>
-    <img src="{{ url_for('static', filename=image_path.split('static/')[-1]) }}" alt="Uploaded Image" width="400">
 
-    <form method="POST" action="{{ url_for('show_faces_multi') }}">
-        <table>
-            <tr>
-                <th>Face</th>
-                <th>Name</th>
-                <th>Emotion</th>
-            </tr>
-            {% for face in faces %}
-            <tr>
-                <td>Face {{ loop.index }}</td>
-                <td>
-                    <input type="text" name="name" value="{{ face.name }}">
-                    <input type="hidden" name="encoding" value="{{ face.encoding }}">
-                </td>
-                <td>{{ face.emotion }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-        <button type="submit">Update Names</button>
-    </form>
+<body>
+    <!-- แถบเมนูด้านบน -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand" href="#">Facial Emotion Recognition</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav"
+            aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item active">
+                    <a class="nav-link" href="/">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/dashboard/">Dashboard</a> <!-- เส้นทางสำหรับไปหน้า Dashboard -->
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <h1 class="text-center mb-4">Detected Faces and Emotions</h1>
+
+                <!-- แสดงภาพที่อัปโหลด -->
+                <div class="text-center">
+                    <img src="{{ url_for('static', filename=image_path.split('static/')[-1]) }}" alt="Uploaded Image"
+                        class="img-fluid mb-4" style="max-width: 400px;">
+                </div>
+
+                <!-- ฟอร์มสำหรับอัปเดตชื่อ -->
+                <form method="POST" action="{{ url_for('show_faces_multi') }}">
+                    <table class="table table-bordered text-center">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Face</th>
+                                <th>Name</th>
+                                <th>Emotion</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for face in faces %}
+                            <tr>
+                                <td>Face {{ loop.index }}</td>
+                                <td>
+                                    <input type="text" name="name" class="form-control" value="{{ face.name }}">
+                                    <input type="hidden" name="encoding" value="{{ face.encoding }}">
+                                </td>
+                                <td>{{ face.emotion }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                    <!-- ปุ่มอัปเดตชื่อและปุ่มกลับไปหน้าที่แล้ว -->
+                    <div class="d-flex justify-content-between">
+                        <a href="javascript:history.back()" class="btn btn-secondary">Go Back</a>
+                        <!-- เปลี่ยนปุ่มให้ลิงก์ไปที่ dashboard -->
+                        <a href="/dashboard/" class="btn btn-primary">Go to Dashboard</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.11.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
 </body>
+
 </html>

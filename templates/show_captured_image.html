@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Captured Image</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+</head>
+
+<body>
+    <div class="container mt-5">
+        <h2>Captured Image from Webcam</h2>
+        <!-- แสดงรูปที่ถ่าย -->
+        <img src="{{ url_for('static', filename='uploads/' + image_path.split('/')[-1]) }}" class="img-fluid"
+            alt="Captured Image">
+
+        <br><br>
+        <a href="/" class="btn btn-primary">Go Back</a>
+    </div>
+</body>
+
+</html>

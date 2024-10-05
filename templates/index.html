@@ -1,11 +1,167 @@
-{% extends "layout.html" %}
-{% block content %}
-<h1>Facial Emotion Recognition System</h1>
-<h2>Upload Single Image</h2>
-<form method="POST" action="/upload" enctype="multipart/form-data">
-    <input type="file" name="file">
-    <button type="submit" class="btn btn-primary">Upload</button>
-</form>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facial Emotion Recognition</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <script>
+        function showUploadForm() {
+            var uploadType = document.getElementById("uploadType").value;
+
+            if (uploadType === "single") {
+                document.getElementById("singleUploadForm").style.display = "block";
+                document.getElementById("multipleUploadForm").style.display = "none";
+                document.getElementById("webcamForm").style.display = "none";
+            } else if (uploadType === "multiple") {
+                document.getElementById("singleUploadForm").style.display = "none";
+                document.getElementById("multipleUploadForm").style.display = "block";
+                document.getElementById("webcamForm").style.display = "none";
+            } else if (uploadType === "webcam") {
+                document.getElementById("singleUploadForm").style.display = "none";
+                document.getElementById("multipleUploadForm").style.display = "none";
+                document.getElementById("webcamForm").style.display = "block";
+                startWebcam();
+            } else {
+                document.getElementById("singleUploadForm").style.display = "none";
+                document.getElementById("multipleUploadForm").style.display = "none";
+                document.getElementById("webcamForm").style.display = "none";
+            }
+        }
+
+        function previewSingleImage(event) {
+            var output = document.getElementById('singleImagePreview');
+            output.src = URL.createObjectURL(event.target.files[0]);
+            output.style.display = "block";
+        }
+
+        function previewMultipleImages(event) {
+            var output = document.getElementById('multipleImagePreview');
+            output.innerHTML = "";  // ลบตัวอย่างเก่าออกก่อน
+
+            for (let i = 0; i < event.target.files.length; i++) {
+                let img = document.createElement('img');
+                img.src = URL.createObjectURL(event.target.files[i]);
+                img.style.maxWidth = "200px";
+                img.style.margin = "5px";
+                output.appendChild(img);
+            }
+        }
+
+        function startWebcam() {
+            var video = document.getElementById('webcam');
+            var constraints = { video: true };
+
+            navigator.mediaDevices.getUserMedia(constraints)
+                .then(function (stream) {
+                    video.srcObject = stream;
+                    video.play();
+                })
+                .catch(function (err) {
+                    console.log("An error occurred: " + err);
+                });
+        }
+
+        function captureImage() {
+            var video = document.getElementById('webcam');
+            var canvas = document.getElementById('webcamCanvas');
+            var context = canvas.getContext('2d');
+
+            // วาดภาพจากวิดีโอไปที่แคนวาส
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // แปลงภาพเป็น Base64
+            var dataURL = canvas.toDataURL('image/png');
+
+            // เก็บภาพ base64 ลงใน input ที่ซ่อนไว้
+            document.getElementById('capturedImage').value = dataURL;
+        }
+
+    </script>
+</head>
+
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand" href="#">Facial Emotion Recognition</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav"
+            aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item active">
+                    <a class="nav-link" href="/">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/dashboard/">Dashboard</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1 class="mt-5">Facial Emotion Recognition</h1>
+
+        <form method="POST">
+            <div class="form-group">
+                <label for="uploadType">Select Upload Type:</label>
+                <select class="form-control" id="uploadType" name="upload_type" onchange="showUploadForm()">
+                    <option value="">-- Select --</option>
+                    <option value="single">Single Image</option>
+                    <option value="multiple">Multiple Images</option>
+                    <option value="webcam">Webcam Capture</option>
+                </select>
+            </div>
+        </form>
+
+        <!-- ฟอร์มอัปโหลดรูปเดี่ยว -->
+        <div id="singleUploadForm" style="display: none;">
+            <h2>Upload Single Image</h2>
+            <form action="/upload" method="POST" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="file">Select image:</label>
+                    <input type="file" class="form-control-file" id="file" name="file"
+                        onchange="previewSingleImage(event)">
+                </div>
+                <img id="singleImagePreview" style="display: none; max-width: 300px; margin-top: 20px;" />
+                <button type="submit" class="btn btn-primary mt-3">Upload</button>
+            </form>
+        </div>
+
+        <!-- ฟอร์มอัปโหลดหลายรูป -->
+        <div id="multipleUploadForm" style="display: none;">
+            <h2>Upload Multiple Images</h2>
+            <form action="/upload_multiple" method="POST" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="files">Select images:</label>
+                    <input type="file" class="form-control-file" id="files" name="files" multiple
+                        onchange="previewMultipleImages(event)">
+                </div>
+                <div id="multipleImagePreview" style="display: flex; flex-wrap: wrap;"></div>
+                <button type="submit" class="btn btn-primary mt-3">Upload</button>
+            </form>
+        </div>
+
+        <!-- ฟอร์มถ่ายภาพจากเว็บแคม -->
+        <div id="webcamForm" style="display: none;">
+            <h2>Capture Image from Webcam</h2>
+            <video id="webcam" width="640" height="480" autoplay></video>
+            <canvas id="webcamCanvas" width="640" height="480" style="display: none;"></canvas>
+            <!-- ซ่อนไว้สำหรับการแปลงภาพ -->
+            <form action="/upload" method="POST" enctype="multipart/form-data" id="webcamForm">
+                <input type="hidden" name="captured_image" id="capturedImage"> <!-- สำหรับเก็บรูปภาพ base64 -->
+                <button type="submit" class="btn btn-primary mt-3" onclick="captureImage()">Capture and Upload</button>
+            </form>
+        </div>
 
 
-{% endblock %}
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.11.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+</body>
+
+</html>
