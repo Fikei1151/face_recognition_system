@@ -13,3 +13,4 @@ redis
 dash
 dash-bootstrap-components
 pandas
+imageio
