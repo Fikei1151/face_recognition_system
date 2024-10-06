@@ -2,45 +2,108 @@
 {% block content %}
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Show Faces</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            color: #333;
+        }
+        .face-section {
+            margin-bottom: 30px;
+        }
+        .face-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .face-item img {
+            width: 200px;
+            height: auto;
+            margin-right: 20px;
+            margin-top: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group input[type="text"] {
+            padding: 8px;
+            width: calc(100% - 100px);
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
 </head>
+
 <body>
-    <h1>Results for Known Faces</h1>
-    {% if faces %}
-        <ul>
-        {% for face in faces %}
-            <li>
-                Name: {{ face.name }} - Emotion: {{ face.emotion }} <br>
-                <img src="{{ face.image_path }}" alt="Face Image" style="width:100px;">
-            </li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p>No known faces detected.</p>
-    {% endif %}
-
-    <h1>Enter Names for Unknown Faces</h1>
-    {% if unknown_faces %}
-        <form action="{{ url_for('save_person') }}" method="POST">
-        {% for face in unknown_faces %}
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Results for Known Faces</h1>
+        {% if faces %}
             <div>
-                <label for="name">Enter name for this face:</label>
-                <input type="text" name="name" required>
-                <input type="hidden" name="encoding" value="{{ face.encoding }}">
-                <input type="hidden" name="image_path" value="{{ face.image_path }}">
-                <img src="{{ face.image_path }}" alt="Unknown Face" style="width:100px;">
+                {% for face in faces %}
+                    <div class="face-item">
+                        <img src="{{ face.image_path }}" alt="Face Image">
+                        <div>
+                            <p><strong>Name:</strong> {{ face.name }}</p>
+                            <p><strong>Emotion:</strong> {{ face.emotion }}</p>
+                        </div>
+                    </div>
+                {% endfor %}
             </div>
-        {% endfor %}
-        <button type="submit">Save</button>
-        </form>
-    {% else %}
-        <p>No unknown faces to input.</p>
-    {% endif %}
-</body>
-</html>
+        {% else %}
+            <p>No known faces detected.</p>
+        {% endif %}
+    </div>
 
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Enter Names for Unknown Faces</h1>
+        <form action="{{ url_for('save_person') }}" method="POST"">
+            {% if unknown_faces %}
+                {% for face in unknown_faces %}
+                    <div class="form-group">
+                        <label for="name">Enter name for this face:</label>
+                        <input type="text" name="name" class="form-control" required>
+                        <input type="hidden" name="encoding" value="{{ face.encoding }}">
+                        <input type="hidden" name="image_path" value="{{ face.image_path }}">
+                        <div class="face-item">
+                            <img src="{{ face.image_path }}" alt="Unknown Face">                            
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p>No unknown faces to input.</p>
+            {% endif %}
+            
+            <button type="submit" class="btn btn-success mt-3">Save</button>
+            
+        </form>
+        <!-- ปุ่มอัปเดตชื่อและปุ่มกลับไปหน้าที่แล้ว -->
+        <div class="d-flex justify-content-between", style="margin-top: 20px;">
+            <a href="javascript:history.back()" class="btn btn-secondary">Go Back</a>
+            <a href="/dashboard/" class="btn btn-primary">Go to Dashboard</a>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.11.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+</body>
+
+</html>
 {% endblock %}

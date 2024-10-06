@@ -505,6 +505,13 @@ def generate_dashboard_layout():
     )
     return layout
 
+def extract_emotion_type(emotion_with_percentage):
+    # ตัดส่วนที่เป็นเปอร์เซ็นต์ออกจากประเภทอารมณ์
+    if "(" in emotion_with_percentage:
+        return emotion_with_percentage.split(" (")[0]  # เก็บเฉพาะประเภทอารมณ์
+    return emotion_with_percentage
+
+
 
 # Function to calculate the dominant emotion for each day
 def calculate_dominant_emotion(data):
@@ -529,14 +536,6 @@ def calculate_dominant_emotion(data):
         dominant_emotions[day] = max(set(emotions), key=emotions.count)
 
     return dominant_emotions
-
-
-def extract_emotion_type(emotion_with_percentage):
-    # ตัดส่วนที่เป็นเปอร์เซ็นต์ออกจากประเภทอารมณ์
-    if "(" in emotion_with_percentage:
-        return emotion_with_percentage.split(" (")[0]  # เก็บเฉพาะประเภทอารมณ์
-    return emotion_with_percentage
-
 
 @dash_app.callback(
     [
